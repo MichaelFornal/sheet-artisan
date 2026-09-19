@@ -1,0 +1,10 @@
+{
+  "company": "<<company>>",
+  "domain": "<<domain>>",
+  "workbook_prefix": "<<prefix>>",
+  "author": "<<author>>",
+  "contact": "<<contact>>",
+  "recipient_name": "",
+  "repo_url": "",
+  "show_private_methods": false
+}

@@ -1,0 +1,9 @@
+{
+  "github_owner": "MichaelFornal",
+  "git_name": "Michael Fornal",
+  "git_email": "253626225+MichaelFornal@users.noreply.github.com",
+  "commit_trailer": "Assisted-by: Claude Code",
+  "author_line": "Michael Fornal",
+  "contact_line": "",
+  "email_allowlist": ["noreply@anthropic.com", "users.noreply.github.com", "example.com", "example.org", "example.net"]
+}

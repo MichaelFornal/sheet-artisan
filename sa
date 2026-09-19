@@ -1,0 +1,27 @@
+#!/bin/bash
+# Sheet Artisan command line. Run from anywhere: /path/to/sheet-artisan/sa <command> ...
+SA_ROOT="$(cd "$(dirname "$0")" && pwd)"
+cmd="$1"; shift
+case "$cmd" in
+  new)                       exec python3 "$SA_ROOT/tools/new_run.py" "$@" ;;
+  status|stage|search|decide) exec python3 "$SA_ROOT/tools/stage.py" "$cmd" "$@" ;;
+  check)                     exec python3 "$SA_ROOT/tools/check_run.py" "$@" ;;
+  publish)                   exec python3 "$SA_ROOT/tools/publish.py" "$@" ;;
+  scan)                      exec python3 "$SA_ROOT/tools/scan.py" "$@" ;;
+  claims)                    exec python3 "$SA_ROOT/tools/claims_check.py" "$@" ;;
+  test)                      cd "$SA_ROOT" && exec python3 -m unittest discover -s tests -t . "$@" ;;
+  *)
+    cat <<'USAGE'
+sa new "Company" [--posting URL] [--domain acme.com]   start a run
+sa status [slug]                                        where every run stands / one run in detail
+sa stage <slug> <stage> ["note"]                        advance a run (logged in run.md)
+sa search <slug> <b1|b2|b3|reserve> [N]                 count WebSearch spend against the budget
+sa decide <slug> <key> "value"                          record a brainstorm decision
+sa check <slug> [--tier T]                              the B5 gate: facts, QA, drafts, workbook
+sa publish <slug> --tier public|private|none [--go]     stage + scan; publishes only with --go
+sa scan <dir> [--deny TERM...]                          secrets / paths / contacts / deny terms
+sa claims FILE... [--facts facts.json]                  unbacked numbers in prose
+sa test                                                 the system's own tests
+USAGE
+    exit 1 ;;
+esac

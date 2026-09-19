@@ -1,0 +1,25 @@
+{
+  "title": "REPLACE: dataset title (name the niche, never the target company)",
+  "niche_slug": "replace-with-niche-slug",
+  "grain": "REPLACE: one row = ...",
+  "key": ["source_url"],
+  "sensitivity": "none",
+  "tier": "public",
+  "expected_rows": null,
+  "rate": 1.0,
+  "user_agent": null,
+  "repo_url": null,
+  "spot_check_fields": ["name"],
+  "limits": [],
+  "columns": [
+    {"name": "name", "type": "text", "definition": "REPLACE", "source": "example", "required": true},
+    {"name": "category", "type": "text", "definition": "REPLACE", "source": "example"},
+    {"name": "employees", "type": "integer", "definition": "REPLACE", "source": "example", "min": 0},
+    {"name": "source_url", "type": "url", "definition": "The page or API record this row was read from", "source": "all", "required": true},
+    {"name": "fetched_at", "type": "datetime", "definition": "UTC time that record was fetched", "source": "all", "required": true}
+  ],
+  "sources": [
+    {"name": "example", "url": "REPLACE", "method": "REPLACE: e.g. paginated JSON API", "auth": "none",
+     "robots": "allowed", "license": "REPLACE: licence or terms note", "publish": "public", "notes": ""}
+  ]
+}
