@@ -5,7 +5,8 @@
     ./sa stage <slug> <stage> "note"    advance (stages: kickoff b1 b2 b3 build sample-check crawl
                                         qa b4 package b5 retro done)
     ./sa search <slug> <b1|b2|b3|reserve> [N]   count N WebSearch calls (default 1)
-    ./sa decide <slug> <key> "value"    record a brainstorm decision (also logged to run.md)
+    ./sa decide <slug> <key> "value"    record a brainstorm decision (also logged to run.md);
+                                        key `domain` also sets run.json/package.json and the deny terms
 """
 from __future__ import annotations
 
@@ -85,6 +86,14 @@ def main():
             print(f"OVER the {args.bucket} budget: switch to WebFetch on known URLs")
     elif args.cmd == "decide":
         run.setdefault("decisions", {})[args.key] = args.value
+        if args.key == "domain":  # found after `sa new`: the public scan must refuse it too
+            run["domain"] = args.value
+            run["deny_terms"] = list(dict.fromkeys([*run.get("deny_terms", []), args.value]))
+            pkg_p = path / "package" / "package.json"
+            if pkg_p.exists():
+                pkg = json.loads(pkg_p.read_text())
+                pkg["domain"] = args.value
+                pkg_p.write_text(json.dumps(pkg, indent=2) + "\n")
         append_log(path, run["stage"], f"decided {args.key}: {args.value}")
         print(f"recorded {args.key}")
     save_run(path, run)

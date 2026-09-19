@@ -252,3 +252,9 @@ What changed from the plan above while building it, and why:
   - 66 tests, including a toy run end to end (scaffold → sample → full → spot → sheet → check →
     publish plans for all three tiers, against a local server);
   - one real `claude -p` batched call with an offline replay.
+- **Pre-flight before the first real run (same day):** live HTTPS from system Python (LibreSSL),
+  robots refusals on a real site, a nested `claude -p` inside a Claude Code session, and a sample
+  build against a live public API with an AI column and an offline replay. Two fetcher bugs found
+  on the real network and fixed with tests: bodies that servers gzip unasked (python.org) came back
+  undecoded, and header lookup was case-sensitive. `sa decide <slug> domain x` now adds a domain
+  found after kickoff to the public-scan deny terms.

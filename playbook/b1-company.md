@@ -51,5 +51,7 @@ The decision map table, a three-line company summary, and the recipient hypothes
 - `./sa decide <slug> decisions "…"`
 - `./sa decide <slug> recipient "…"`
 - `./sa decide <slug> angle "…"` (if he gave one)
+- `./sa decide <slug> domain company.com` if the run was started without `--domain`. This also
+  adds the domain to the terms the public-tier scan refuses.
 
 Apply his corrections to `01_brief.md`, then `./sa stage <slug> b2`.

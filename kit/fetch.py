@@ -13,6 +13,8 @@ What it guarantees:
 - One request per `1/rate` seconds per host. 429/503 honour Retry-After; a 429 doubles the host's
   interval and every success decays it back toward the base (a penalty that never decays turns
   one bad minute into a permanently slow crawl).
+- Bodies arrive decoded (gzip/deflate; some servers compress whatever the request asks for), and
+  `r.headers` looks names up in any case ("content-type" and "Content-Type" are the same header).
 - `offline=True` serves only from cache and raises CacheMiss otherwise (for rebuilding sheets
   without touching the network). `fresh=True` bypasses the cache without overwriting it (for
   live spot-checks).
@@ -33,6 +35,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import urllib.robotparser
+import zlib
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -55,6 +58,55 @@ class CacheMiss(FetchError):
 
 def _now_iso():
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+class Headers(dict):
+    """Response headers with case-insensitive lookup: servers send "content-type" as often as
+    "Content-Type". Keys are stored lower-case; a repeated header is joined with ", "."""
+
+    def __init__(self, items=()):
+        super().__init__()
+        for k, v in (items.items() if isinstance(items, dict) else items):
+            k = k.lower()
+            super().__setitem__(k, f"{dict.get(self, k)}, {v}" if k in self else v)
+
+    def __setitem__(self, k, v):
+        super().__setitem__(k.lower(), v)
+
+    def __getitem__(self, k):
+        return super().__getitem__(k.lower())
+
+    def __contains__(self, k):
+        return super().__contains__(k.lower())
+
+    def get(self, k, default=None):
+        return super().get(k.lower(), default)
+
+    def pop(self, k, *default):
+        return super().pop(k.lower(), *default)
+
+
+def _decode(body, headers, url):
+    """Undo Content-Encoding. Some servers compress whatever the request asked for."""
+    encodings = [e.strip().lower() for e in (headers.get("Content-Encoding") or "").split(",") if e.strip()]
+    if not body or not encodings:
+        return body
+    for enc in reversed(encodings):
+        try:
+            if enc in ("gzip", "x-gzip"):
+                body = zlib.decompress(body, 16 + zlib.MAX_WBITS)
+            elif enc == "deflate":
+                try:
+                    body = zlib.decompress(body)
+                except zlib.error:  # raw deflate without the zlib wrapper
+                    body = zlib.decompress(body, -zlib.MAX_WBITS)
+            elif enc != "identity":
+                raise FetchError(f"{url}: cannot decode Content-Encoding {enc!r} with the standard library")
+        except zlib.error as e:
+            raise FetchError(f"{url}: corrupt {enc} body ({e})")
+    headers.pop("Content-Encoding", None)
+    headers.pop("Content-Length", None)
+    return body
 
 
 @dataclass
@@ -242,7 +294,7 @@ class Fetcher:
             body = body_p.read_bytes()
         except (OSError, ValueError):
             return None
-        return Response(meta["url"], meta["status"], meta["headers"], body, meta["fetched_at"], True)
+        return Response(meta["url"], meta["status"], Headers(meta["headers"]), body, meta["fetched_at"], True)
 
     def _cache_write(self, key, method, resp):
         meta_p, body_p = self._paths(key)
@@ -283,7 +335,7 @@ class Fetcher:
             raise RobotsDisallowed(f"robots.txt disallows {url}")
 
     def _retry_after(self, headers):
-        v = (headers.get("Retry-After") or headers.get("retry-after") or "").strip()
+        v = (headers.get("Retry-After") or "").strip()
         if not v:
             return None
         if re.fullmatch(r"\d+(\.\d+)?", v):
@@ -299,21 +351,22 @@ class Fetcher:
         wait = host.reserve()
         if wait > 0:
             time.sleep(wait)
-        h = {"User-Agent": self.user_agent, "Accept": "*/*", **(headers or {})}
+        h = {"User-Agent": self.user_agent, "Accept": "*/*", "Accept-Encoding": "gzip, deflate",
+             **(headers or {})}
         req = urllib.request.Request(url, data=body, headers=h, method=method)
         self._bump("requests")
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                 payload = resp.read()
-                status, rheaders, final = resp.status, dict(resp.headers.items()), resp.geturl()
+                status, rheaders, final = resp.status, Headers(resp.headers.items()), resp.geturl()
         except urllib.error.HTTPError as e:
             try:
                 payload = e.read()
             except Exception:
                 payload = b""
-            status, rheaders, final = e.code, dict(e.headers.items()) if e.headers else {}, url
+            status, rheaders, final = e.code, Headers(e.headers.items() if e.headers else ()), url
         self._bump("bytes", len(payload))
-        return Response(final, status, rheaders, payload, _now_iso())
+        return Response(final, status, rheaders, _decode(payload, rheaders, final), _now_iso())
 
     def _with_retries(self, method, url, headers, body, give_up_quietly=False):
         host = self._host(url)

@@ -1,7 +1,9 @@
+import gzip
 import json
 import tempfile
 import time
 import unittest
+import zlib
 
 from kit.fetch import CacheMiss, Fetcher, FetchError, RobotsDisallowed
 from tests._server import ROBOTS_ALLOW_ALL, FixtureServer, ok
@@ -163,6 +165,52 @@ class FetchTests(unittest.TestCase):
     def test_json_helper(self):
         with FixtureServer({"/robots.txt": ROBOTS_ALLOW_ALL, "/j": ok([1, 2])}) as s:
             self.assertEqual(fetcher(self.tmp).get_json(s.url("/j")), [1, 2])
+
+    def test_gzip_body_is_decoded_even_when_unasked(self):
+        # python.org gzips whatever the request says, with lower-case header names.
+        body = gzip.compress(json.dumps({"a": 1}).encode())
+        headers = {"content-encoding": "gzip", "content-type": "application/json"}
+        with FixtureServer({"/robots.txt": ROBOTS_ALLOW_ALL, "/z": ok(body, headers=headers)}) as s:
+            f = fetcher(self.tmp)
+            self.assertEqual(f.get(s.url("/z")).json(), {"a": 1})
+            self.assertEqual(f.get(s.url("/z")).json(), {"a": 1})  # and from the cache
+            self.assertEqual(s.hits["/z"], 1)
+
+    def test_deflate_body_is_decoded(self):
+        body = zlib.compress(b"plain words")
+        routes = {"/robots.txt": ROBOTS_ALLOW_ALL, "/d": ok(body, headers={"Content-Encoding": "deflate"})}
+        with FixtureServer(routes) as s:
+            self.assertEqual(fetcher(self.tmp).get(s.url("/d")).text, "plain words")
+
+    def test_undecodable_encoding_is_an_error_not_garbage(self):
+        routes = {"/robots.txt": ROBOTS_ALLOW_ALL, "/br": ok(b"\x8b\x02\x80", headers={"Content-Encoding": "br"})}
+        with FixtureServer(routes) as s:
+            with self.assertRaises(FetchError):
+                fetcher(self.tmp).get(s.url("/br"))
+
+    def test_asks_for_gzip(self):
+        with FixtureServer({"/robots.txt": ROBOTS_ALLOW_ALL, "/g": ok("x")}) as s:
+            fetcher(self.tmp).get(s.url("/g"))
+            self.assertIn("gzip", s.last_headers["/g"].get("Accept-Encoding", ""))
+
+    def test_header_lookup_ignores_case(self):
+        body = "café".encode("latin-1")
+        routes = {"/robots.txt": ROBOTS_ALLOW_ALL,
+                  "/h": ok(body, headers={"content-type": "text/plain; charset=latin-1"})}
+        with FixtureServer(routes) as s:
+            f = fetcher(self.tmp)
+            for r in (f.get(s.url("/h")), f.get(s.url("/h"))):  # live, then cached
+                self.assertEqual(r.headers.get("Content-Type"), "text/plain; charset=latin-1")
+                self.assertIn("CONTENT-TYPE", r.headers)
+                self.assertEqual(r.text, "café")
+
+    def test_retry_after_in_any_case_is_honoured(self):
+        def limited(m, q, b, n):
+            return (429, {"RETRY-AFTER": "1"}, "slow down") if n == 1 else (200, {}, "fine")
+        with FixtureServer({"/robots.txt": ROBOTS_ALLOW_ALL, "/limited": limited}) as s:
+            t0 = time.monotonic()
+            self.assertEqual(fetcher(self.tmp).get(s.url("/limited")).text, "fine")
+            self.assertGreaterEqual(time.monotonic() - t0, 0.95)
 
 
 if __name__ == "__main__":

@@ -135,6 +135,18 @@ class DenyTerms(unittest.TestCase):
                          ["Acme Robotics, Inc.", "Acme Robotics", "acme.test"])
         self.assertEqual(deny_terms("Toy Co", ""), ["Toy Co", "Toy"])
 
+    def test_domain_decided_later_joins_the_deny_terms(self):
+        # B1 often finds the domain after `sa new`; the public scan must still refuse it.
+        runs = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, runs, ignore_errors=True)
+        rundir = scaffold("Toy Co", runs=runs)
+        subprocess.run(["python3", "tools/stage.py", "decide", "toy-co", "domain", "toyco.test",
+                        "--runs-dir", runs], check=True, capture_output=True)
+        run = json.loads((rundir / "run.json").read_text())
+        self.assertEqual(run["domain"], "toyco.test")
+        self.assertEqual(run["deny_terms"], ["Toy Co", "Toy", "toyco.test"])
+        self.assertEqual(json.loads((rundir / "package" / "package.json").read_text())["domain"], "toyco.test")
+
 
 class EndToEnd(unittest.TestCase):
     @classmethod
