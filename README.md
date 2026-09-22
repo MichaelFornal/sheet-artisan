@@ -7,5 +7,5 @@ pipe that built it.
 - **How to run it:** open Claude Code in this folder. `CLAUDE.md` is the runbook, and
   `./sa new "Company" --posting URL` starts a run.
 - **Why it works this way:** `docs/design.md`.
-- **The stages:** `playbook/`, one guide per stage. Five of them are live brainstorms with Mike.
+- **The stages:** `playbook/`, one guide per stage. Five of them are live brainstorms with the operator.
 - **Tests:** `./sa test`.
