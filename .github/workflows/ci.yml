@@ -1,0 +1,24 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.12"]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+      # openpyxl is the only third-party import; everything else is stdlib.
+      - run: pip install openpyxl
+      # The fetch and end-to-end tests talk to a server on localhost
+      # (tests/_server.py), so the suite needs no network and no keys.
+      - run: ./sa test
